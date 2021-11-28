@@ -1,17 +1,33 @@
 const { Model, DataTypes } = require('sequelize');
-const bcrypt = require('bcrypt');
 const sequelize = require('../config/connection');
-
-// create our User model
-class User extends Model {
-  // set up method to run on instance data (per user) to check password
-  checkPassword(loginPw) {
-    return bcrypt.compareSync(loginPw, this.password);
+// create our Post model
+class Post extends Model {
+  static upvote(body, models) {
+    return models.Vote.create({
+      user_id: body.user_id,
+      post_id: body.post_id
+    }).then(() => {
+      return Post.findOne({
+        where: {
+          id: body.post_id
+        },
+        attributes: [
+          'id',
+          'post_url',
+          'title',
+          'created_at',
+          [
+            sequelize.literal('(SELECT COUNT(*) FROM vote WHERE post.id = vote.post_id)'),
+            'vote_count'
+          ]
+        ]
+      });
+    });
   }
 }
 
-// create fields/columns for User model
-User.init(
+// create fields/columns for Post model
+Post.init(
   {
     id: {
       type: DataTypes.INTEGER,
@@ -19,45 +35,31 @@ User.init(
       primaryKey: true,
       autoIncrement: true
     },
-    username: {
+    title: {
       type: DataTypes.STRING,
       allowNull: false
     },
-    email: {
+    post_url: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
       validate: {
-        isEmail: true
+        isURL: true
       }
     },
-    password: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        len: [4]
+    user_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'user',
+        key: 'id'
       }
     }
   },
   {
-    hooks: {
-      // set up beforeCreate lifecycle "hook" functionality
-      async beforeCreate(newUserData) {
-        newUserData.password = await bcrypt.hash(newUserData.password, 10);
-        return newUserData;
-      },
-
-      async beforeUpdate(updatedUserData) {
-        updatedUserData.password = await bcrypt.hash(updatedUserData.password, 10);
-        return updatedUserData;
-      }
-    },
     sequelize,
-    timestamps: false,
     freezeTableName: true,
     underscored: true,
-    modelName: 'user'
+    modelName: 'post'
   }
 );
 
-module.exports = User;
+module.exports = Post;
